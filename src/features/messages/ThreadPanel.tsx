@@ -875,7 +875,11 @@ function ThreadMessages({
       0,
       ...snapshot.replies.map((reply) => reply.createdAt),
     ),
-    complete: snapshot.status === "ready" && !snapshot.canLoadMore,
+    complete:
+      snapshot.status === "ready" &&
+      (snapshot.direction === "older"
+        ? !snapshot.resumed
+        : !snapshot.canLoadMore),
   });
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const [newMessageCount, setNewMessageCount] = useState(0);
@@ -1507,7 +1511,11 @@ function ThreadMessages({
   }, [view, snapshot]);
   useLayoutEffect(() => {
     const previous = previousReplies.current;
-    const complete = snapshot.status === "ready" && !snapshot.canLoadMore;
+    const complete =
+      snapshot.status === "ready" &&
+      (snapshot.direction === "older"
+        ? !snapshot.resumed
+        : !snapshot.canLoadMore);
     // Initial traversal has no baseline. Once complete, retain the last
     // observed replies through reconnect loading so recovery can reconcile them.
     if (!complete && !previous.complete) return;
@@ -1530,7 +1538,13 @@ function ThreadMessages({
       };
     if (arrivals > 0 && !follow.current)
       setNewMessageCount((count) => count + arrivals);
-  }, [snapshot.status, snapshot.canLoadMore, snapshot.replies]);
+  }, [
+    snapshot.status,
+    snapshot.direction,
+    snapshot.resumed,
+    snapshot.canLoadMore,
+    snapshot.replies,
+  ]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: Rendered rows/profiles change scroll height; sending is explicit navigation intent.
   useLayoutEffect(() => {
     const element = scroller.current;

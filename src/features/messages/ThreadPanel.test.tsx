@@ -494,6 +494,75 @@ it("starts a single older page after scrolling through 80% of loaded history", (
   h.scroll(0);
   expect(h.view.loadMore).toHaveBeenCalledOnce();
 });
+it("counts live arrivals on Jump to latest for strict threads while older pages remain unloaded, after resumed rows settle", () => {
+  const h = messagesHarness();
+  const initial = {
+    ...row,
+    id: "reply-initial",
+    content: "initial reply",
+    createdAt: 10,
+    createdAtMs: 10_000,
+    threadRootId: row.id,
+    replyParentId: row.id,
+  };
+  h.snapshot.direction = "older";
+  h.snapshot.canLoadMore = true;
+  h.snapshot.resumed = true;
+  h.snapshot.replies = [initial];
+  const section = h.render();
+
+  // Scroll away from latest so Jump to latest is visible.
+  fireEvent.wheel(section, { deltaY: -1 });
+  h.scroll(1000);
+  expect(
+    within(section).getByRole("button", { name: "Jump to latest" }),
+  ).toBeVisible();
+
+  // Resumed rows do not establish an arrival baseline before the first refresh settles.
+  const whileResumed = {
+    ...initial,
+    id: "reply-while-resumed",
+    content: "arrived while resumed",
+    createdAt: 20,
+    createdAtMs: 20_000,
+  };
+  h.snapshot.replies = [initial, whileResumed];
+  h.render();
+  expect(
+    within(section).getByRole("button", { name: "Jump to latest" }),
+  ).toBeVisible();
+
+  // Once the non-resumed strict window settles, even with canLoadMore still
+  // true, subsequent live arrivals increment the new-message count.
+  h.snapshot.resumed = undefined;
+  h.render();
+  const liveArrival = {
+    ...initial,
+    id: "reply-live",
+    content: "live reply",
+    createdAt: 30,
+    createdAtMs: 30_000,
+  };
+  h.snapshot.replies = [initial, whileResumed, liveArrival];
+  h.render();
+  expect(
+    within(section).getByRole("button", { name: "1 new message" }),
+  ).toBeVisible();
+
+  // Prepending an older page does not count as a new arrival.
+  const olderReply = {
+    ...initial,
+    id: "reply-older",
+    content: "older reply",
+    createdAt: 5,
+    createdAtMs: 5_000,
+  };
+  h.snapshot.replies = [olderReply, initial, whileResumed, liveArrival];
+  h.render();
+  expect(
+    within(section).getByRole("button", { name: "1 new message" }),
+  ).toBeVisible();
+});
 it("keeps initial thread loading until available content has been positioned", () => {
   vi.useFakeTimers();
   const h = messagesHarness();
