@@ -1,6 +1,10 @@
 // Pi's providers, as Pi itself has them: the ones it offers, their models,
 // saving a provider's key, and testing that a model answers. Keys go to Pi's
 // own `~/.pi/agent/auth.json`, shared with the `pi` command, never into Buzz.
+import {
+  formatModelChoices,
+  formatModelDisplayName,
+} from "../../features/agents/formatModelDisplayName";
 import type { ModelChoice } from "../../features/agents/ModelPicker";
 import type { Pi } from "./pi";
 import type { ReviewPrompt } from "../../features/agent-protection/models";
@@ -24,6 +28,42 @@ export type Providers = Readonly<{
 
 /** A model, with the thinking levels it supports, lowest first. */
 export type PiModel = ModelChoice & Readonly<{ thinking: readonly string[] }>;
+
+/** Databricks IDs name the model, as Goose shows them: the pi-databricks
+ * provider labels some with the workspace's display name and the rest with
+ * the raw ID. */
+const LABEL_PREFIXES: ReadonlyMap<string, readonly string[]> = new Map([
+  ["databricks", ["databricks-", "goose-"]],
+]);
+const PROVIDER_SUFFIX = / \(Databricks\)$/;
+
+/** A provider's models labelled and sorted by label, so each family reads
+ * in order. An ID the formatter can't name, such as another team's endpoint
+ * or an alias, keeps Pi's label. */
+export function shownModels(
+  provider: string,
+  models: readonly PiModel[],
+): PiModel[] {
+  const prefixes = LABEL_PREFIXES.get(provider);
+  const labeled = prefixes
+    ? formatModelChoices(
+        models.map((model) => ({
+          ...model,
+          label:
+            formatModelDisplayName(model.id, prefixes) === model.id
+              ? model.label.replace(PROVIDER_SUFFIX, "")
+              : model.id,
+        })),
+        prefixes,
+      )
+    : [...models];
+  return labeled.sort((a, b) =>
+    a.label.localeCompare(b.label, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    }),
+  );
+}
 
 export type Tested = Readonly<{ ok: boolean; message: string }>;
 
@@ -71,11 +111,14 @@ export class PiSetup {
         provider: id,
       })
       .then((models) =>
-        models.map((model) => ({
-          id: model.id,
-          label: model.name || model.id,
-          thinking: model.thinking,
-        })),
+        shownModels(
+          id,
+          models.map((model) => ({
+            id: model.id,
+            label: model.name || model.id,
+            thinking: model.thinking,
+          })),
+        ),
       );
     this.listed.set(id, listing);
     listing.catch(() => {
